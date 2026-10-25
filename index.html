@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Cement Mining Academy — Prototype V1</title>
+<style>
+:root{--bg:#101820;--panel:#17232d;--line:#2b414f;--text:#edf4f7;--muted:#a8bbc6;--lime:#c8f169;--orange:#ffb45e}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+#game{position:fixed;inset:0}canvas{display:block;width:100%;height:100%}
+.hud{position:fixed;z-index:2;left:14px;top:14px;max-width:min(440px,calc(100vw - 28px));background:#101820dc;border:1px solid var(--line);border-radius:14px;padding:12px 14px;backdrop-filter:blur(8px)}
+.brand{font-size:11px;letter-spacing:.16em;color:var(--lime);font-weight:800}.headline{font-size:19px;font-weight:800;margin:2px 0 8px}
+.stats{display:flex;gap:7px;flex-wrap:wrap}.pill{border:1px solid #36505d;border-radius:999px;padding:4px 8px;color:#dce8ed;font-size:12px}
+.progress{height:6px;background:#2a3c46;border-radius:10px;overflow:hidden;margin-top:9px}.bar{height:100%;width:0;background:var(--lime);transition:width .25s}
+.hint{position:fixed;z-index:2;left:50%;bottom:18px;transform:translateX(-50%);background:#101820e8;border:1px solid var(--line);border-radius:12px;padding:9px 14px;color:#eaf3f6;text-align:center;width:max-content;max-width:calc(100vw - 28px)}
+.panel{position:fixed;z-index:5;right:14px;top:14px;bottom:14px;width:min(430px,calc(100vw - 28px));background:#111c25f5;border:1px solid var(--line);border-radius:18px;padding:20px;overflow:auto;display:none;box-shadow:0 20px 70px #0008}
+.panel.open{display:block}.close{float:right;border:1px solid #3a5360;background:#1d2c36;color:white;border-radius:8px;padding:5px 10px;cursor:pointer}
+h2{margin:10px 0 8px;font-size:22px}h3{margin:18px 0 6px}.muted{color:var(--muted)}.station-tag{display:inline-block;color:#17200d;background:var(--lime);padding:4px 8px;border-radius:6px;font-size:11px;font-weight:900;letter-spacing:.08em}
+button{border:0;border-radius:10px;padding:10px 13px;font-weight:750;cursor:pointer;background:var(--lime);color:#15200d;margin:5px 4px 5px 0}button.secondary{background:#253945;color:#edf4f7;border:1px solid #3a5360}button:disabled{opacity:.45;cursor:not-allowed}
+.card{background:#1a2a35;border:1px solid #304651;border-radius:12px;padding:12px;margin:10px 0}
+.quiz-option{display:block;width:100%;text-align:left;background:#20323d;color:#edf4f7;border:1px solid #3a5360;margin:7px 0}.quiz-option.selected{outline:2px solid var(--lime)}
+#mobileControls{position:fixed;z-index:3;left:14px;bottom:70px;display:none;grid-template-columns:repeat(3,46px);grid-template-rows:repeat(2,46px);gap:5px}
+#mobileControls button{margin:0;padding:0;border-radius:12px;background:#12212bdc;color:white;border:1px solid #57707c;font-size:18px;touch-action:none}
+#mobileControls .up{grid-column:2;grid-row:1}#mobileControls .left{grid-column:1;grid-row:2}#mobileControls .down{grid-column:2;grid-row:2}#mobileControls .right{grid-column:3;grid-row:2}
+#actionBtn{position:fixed;z-index:3;right:18px;bottom:82px;display:none;border-radius:50%;width:70px;height:70px;background:var(--orange);color:#251707}
+#mapLabel{position:fixed;right:14px;bottom:18px;color:#d4e0e5;font-size:11px;background:#101820b8;padding:6px 9px;border-radius:8px}
+@media(max-width:700px){.hud{top:8px;left:8px;padding:9px 11px}.headline{font-size:16px}.hint{bottom:12px;font-size:12px}.panel{top:8px;right:8px;bottom:8px;width:calc(100vw - 16px);padding:16px}#mobileControls{display:grid}#actionBtn{display:block}#mapLabel{display:none}}
+</style>
+</head>
+<body>
+<div id="game"></div>
+<div class="hud">
+  <div class="brand">CEMENT MINING ACADEMY</div>
+  <div class="headline">Quarry Explorer · Prototype V1</div>
+  <div class="stats"><span class="pill" id="namePill">Peserta: Demo</span><span class="pill" id="timer">Waktu: 00:00</span><span class="pill" id="scorePill">XP: 0</span></div>
+  <div class="progress"><div class="bar" id="progressBar"></div></div>
+  <div class="muted" id="progressText" style="font-size:12px;margin-top:5px">0 dari 3 lokasi dipelajari</div>
+</div>
+<div class="hint" id="hint">Gunakan WASD / tombol arah. Dekati penanda lokasi lalu tekan E atau INTERAKSI.</div>
+<div id="mobileControls">
+  <button class="up" data-key="w">▲</button><button class="left" data-key="a">◀</button><button class="down" data-key="s">▼</button><button class="right" data-key="d">▶</button>
+</div>
+<button id="actionBtn">INTERAKSI</button>
+<div id="mapLabel">DEMO 3D · Data tersimpan di browser ini</div>
+<div class="panel" id="panel">
+  <button class="close" id="closePanel">Tutup ✕</button>
+  <div id="panelContent"></div>
+</div>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.module.js';
+
+const mount = document.getElementById('game');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9bb9c4);
+scene.fog = new THREE.Fog(0x9bb9c4, 45, 145);
+const camera = new THREE.PerspectiveCamera(58, innerWidth/innerHeight, .1, 300);
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+mount.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xe4f4ff,0x5e523d,2.0));
+const sun=new THREE.DirectionalLight(0xffedce,3.0);sun.position.set(-35,55,25);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);scene.add(sun);
+
+const mat=(color,roughness=.9)=>new THREE.MeshStandardMaterial({color,roughness});
+const groundMat=mat(0x8c8c70), rockMat=mat(0xaaa18a), rockDark=mat(0x6d7064), roadMat=mat(0x5b5a50), greenMat=mat(0x5f7952), steelMat=mat(0x53616a), yellowMat=mat(0xf0b43f), whiteMat=mat(0xe5e2d5);
+function box(parent,x,y,z,sx,sy,sz,material,cast=true){const m=new THREE.Mesh(new THREE.BoxGeometry(sx,sy,sz),material);m.position.set(x,y,z);m.castShadow=cast;m.receiveShadow=true;parent.add(m);return m}
+function cylinder(parent,x,y,z,r1,r2,h,material,segments=8){const m=new THREE.Mesh(new THREE.CylinderGeometry(r1,r2,h,segments),material);m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;parent.add(m);return m}
+
+// quarry floor and stepped benches
+box(scene,0,-1.3,0,180,2,180,groundMat,false);
+for(let i=0;i<5;i++){
+  const z=-45+i*20;
+  box(scene,0,1+i*.45,z,120,1,11, i%2?rockMat:rockDark,false);
+  box(scene,0,1.65+i*.45,z+5.8,120,.25,1.2,roadMat,false);
+}
+box(scene,0,-.2,8,13,.25,100,roadMat,false);
+for(let i=0;i<22;i++){
+  const x=-52+(i%11)*10, z=-36+Math.floor(i/11)*70;
+  const r=1.3+(i%4)*.45;
+  const b=new THREE.Mesh(new THREE.DodecahedronGeometry(r,0),i%3===0?rockDark:rockMat);
+  b.position.set(x,.1+r*.45,z);b.scale.y=.55;b.rotation.set(.2*i,.4*i,.1*i);b.castShadow=true;b.receiveShadow=true;scene.add(b);
+}
+// haul road markings
+for(let z=-43;z<53;z+=8) box(scene,0,-.04,z,.18,.04,2.5,yellowMat,false);
+// small distant plant / crusher
+box(scene,-32,2,-31,17,4,9,steelMat);
+box(scene,-32,5,-31,8,2,8,whiteMat);
+box(scene,-37,8,-31,1,5,1,steelMat);
+box(scene,-28,8,-31,1,5,1,steelMat);
+box(scene,-32,6,-25,19,.6,2,roadMat);
+for(let i=0;i<5;i++){cylinder(scene,-40+i*4,2.6,-24,0.35,0.35,1.8,yellowMat,8)}
+// conveyor
+const conv=box(scene,-18,4,-28,25,.35,1.2,steelMat);conv.rotation.z=-.12;
+for(let i=0;i<13;i++) cylinder(scene,-29+i*1.8,3.3,-28,.18,.18,1.1,rockDark,8).rotation.z=Math.PI/2;
+// workshop
+box(scene,34,2,-25,13,4,9,whiteMat);box(scene,34,4.5,-25,14,.6,10,steelMat);
+for(let x=29;x<=39;x+=5)box(scene,x,2.3,-20,1.3,3.3,.3,rockDark);
+// stockpile
+for(let i=0;i<3;i++){const p=new THREE.Mesh(new THREE.SphereGeometry(5+i,16,10),i===1?rockMat:whiteMat);p.position.set(30,1.1+i*.1,22+i*8);p.scale.set(1.5,.5,1);p.castShadow=true;scene.add(p)}
+// parked haul truck
+const truck=new THREE.Group();scene.add(truck);truck.position.set(11,0,-8);
+box(truck,0,1.6,0,5,1.4,2.4,yellowMat);box(truck,-1.3,2.65,-.15,1.8,1.2,2,steelMat);
+box(truck,1.4,2.3,0,2.2,.25,2.2,rockDark);
+for(const x of [-1.7,1.7])for(const z of [-1.05,1.05]){const w=cylinder(truck,x,.7,z,.52,.52,.3,rockDark,12);w.rotation.z=Math.PI/2}
+box(truck,0,.6,0,3,.25,1.2,steelMat);
+
+// player avatar
+const player=new THREE.Group();scene.add(player);
+const body= new THREE.Mesh(new THREE.CapsuleGeometry(.42,.75,4,8),mat(0x234b59));body.position.y=1.0;body.castShadow=true;player.add(body);
+const head=new THREE.Mesh(new THREE.SphereGeometry(.28,12,10),mat(0xd4a17d));head.position.y=1.75;head.castShadow=true;player.add(head);
+const helmet=new THREE.Mesh(new THREE.SphereGeometry(.31,12,8,0,Math.PI*2,0,Math.PI/2),yellowMat);helmet.position.y=1.93;helmet.castShadow=true;player.add(helmet);
+const boots=box(player,-.18,.22,0,.22,.38,.28,rockDark);box(player,.18,.22,0,.22,.38,.28,rockDark);
+player.position.set(0,0,24);
+
+const stations=[
+ {id:'loading',name:'Loading & Hauling',tag:'LOKASI 01',pos:new THREE.Vector3(13,0,1),xp:100,desc:'Memahami siklus loading, hauling, dumping, dan faktor yang menentukan cycle time.',facts:['Cycle time terdiri dari waktu loading, hauling, dumping, dan return.','Produktivitas dipengaruhi payload, jarak angkut, kondisi jalan, dan availability alat.','Keselamatan dan jarak aman selalu lebih penting daripada mengejar tonase.'],q:'Faktor mana yang paling langsung memperpanjang waktu edar hauling?',opts:['Kondisi jalan yang buruk','Warna unit','Nama operator'],correct:0},
+ {id:'crusher',name:'Crusher & Feed Rate',tag:'LOKASI 02',pos:new THREE.Vector3(-27,0,-17),xp:100,desc:'Mengenal fungsi crusher, aliran material, dan target feed rate menuju proses berikutnya.',facts:['Feed rate dinyatakan dalam ton per jam (tph).','Gangguan crusher atau conveyor dapat menjadi bottleneck sistem.','Kapasitas aktual perlu dibandingkan dengan target dan jam operasi efektif.'],q:'Satuan yang lazim digunakan untuk menyatakan feed rate adalah…',opts:['Liter per menit','Ton per jam','Meter persegi'],correct:1},
+ {id:'quality',name:'Stockpile & Quality',tag:'LOKASI 03',pos:new THREE.Vector3(29,0,23),xp:100,desc:'Mempelajari fungsi stockpile dan pentingnya pengendalian kualitas batugamping.',facts:['Stockpile membantu menjaga kontinuitas pasokan ke pabrik.','Kualitas bahan baku dipantau berdasarkan parameter yang ditetapkan perusahaan.','Pengambilan sampel harus mengikuti prosedur dan mewakili material yang diuji.'],q:'Tujuan utama pengendalian kualitas batugamping adalah…',opts:['Menjaga material sesuai spesifikasi bahan baku','Membuat jalan tambang lebih lebar','Mengurangi jumlah papan informasi'],correct:0}
+];
+const markers=[];
+stations.forEach((s,i)=>{
+ const g=new THREE.Group();scene.add(g);g.position.copy(s.pos);
+ const base=cylinder(g,0,.15,0,1.35,1.35,.3,mat(0x263a42),24);
+ const ring=new THREE.Mesh(new THREE.TorusGeometry(1.55,.09,8,32),new THREE.MeshStandardMaterial({color:0xc8f169,emissive:0x304018}));
+ ring.rotation.x=Math.PI/2;ring.position.y=.35;g.add(ring);
+ const stem=cylinder(g,0,1.45,0,.12,.12,2.3,yellowMat,8);
+ const orb=new THREE.Mesh(new THREE.SphereGeometry(.45,16,12),new THREE.MeshStandardMaterial({color:0xc8f169,emissive:0x4b641a,emissiveIntensity:.6}));orb.position.y=2.7;g.add(orb);
+ // letter plate
+ const plate=box(g,0,3.35,0,1.6,.45,.15,mat(0x17232d));plate.rotation.x=-.15;
+ markers.push({group:g,orb,station:s});
+});
+
+const state=JSON.parse(localStorage.getItem('cma_demo_state')||'{}');
+state.done=state.done||[];state.answers=state.answers||{};state.xp=state.xp||0;state.seconds=state.seconds||0;state.name=state.name||'Peserta Demo';
+let activeStation=null, selectedAnswer=null, quizMode=false, sessionStart=Date.now();
+document.getElementById('namePill').textContent='Peserta: '+state.name;
+function save(){localStorage.setItem('cma_demo_state',JSON.stringify(state));updateHud()}
+function updateHud(){
+ document.getElementById('scorePill').textContent='XP: '+state.xp;
+ document.getElementById('progressText').textContent=state.done.length+' dari '+stations.length+' lokasi dipelajari';
+ document.getElementById('progressBar').style.width=(state.done.length/stations.length*100)+'%';
+}
+function fmt(n){return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0')}
+function elapsed(){return state.seconds+Math.floor((Date.now()-sessionStart)/1000)}
+function openPanel(content){document.getElementById('panelContent').innerHTML=content;document.getElementById('panel').classList.add('open')}
+function closePanel(){document.getElementById('panel').classList.remove('open');quizMode=false;activeStation=null}
+document.getElementById('closePanel').onclick=closePanel;
+function stationPanel(s){
+ activeStation=s;quizMode=false;
+ const done=state.done.includes(s.id);
+ openPanel(`<span class="station-tag">${s.tag}</span><h2>${s.name}</h2><p class="muted">${s.desc}</p>
+ <div class="card"><b>Materi inti</b><ul>${s.facts.map(x=>'<li>'+x+'</li>').join('')}</ul></div>
+ <div class="card"><b>Misi lokasi</b><p>${done?'Lokasi ini sudah diselesaikan. Kamu boleh mengulang kuis.':'Baca materi, lalu jawab pertanyaan untuk mendapatkan 100 XP.'}</p></div>
+ <button id="startQuiz">${done?'Ulangi kuis':'Selesaikan misi'}</button> <button class="secondary" id="backBtn">Kembali ke tambang</button>`);
+ document.getElementById('startQuiz').onclick=()=>showStationQuiz(s);
+ document.getElementById('backBtn').onclick=closePanel;
+}
+function showStationQuiz(s){
+ quizMode=true;selectedAnswer=null;
+ openPanel(`<span class="station-tag">CEK PEMAHAMAN</span><h2>${s.name}</h2><p>${s.q}</p><div id="opts">${s.opts.map((o,i)=>`<button class="quiz-option" data-i="${i}">${String.fromCharCode(65+i)}. ${o}</button>`).join('')}</div><p class="muted" id="feedback">Pilih satu jawaban.</p><button id="submitAnswer">Kirim jawaban</button> <button class="secondary" id="cancelQuiz">Kembali</button>`);
+ document.querySelectorAll('.quiz-option').forEach(b=>b.onclick=()=>{selectedAnswer=Number(b.dataset.i);document.querySelectorAll('.quiz-option').forEach(x=>x.classList.toggle('selected',x===b))});
+ document.getElementById('cancelQuiz').onclick=()=>stationPanel(s);
+ document.getElementById('submitAnswer').onclick=()=>{
+  if(selectedAnswer===null){document.getElementById('feedback').textContent='Pilih jawaban terlebih dahulu.';return}
+  const ok=selectedAnswer===s.correct;state.answers[s.id]=selectedAnswer;
+  if(ok&&!state.done.includes(s.id)){state.done.push(s.id);state.xp+=s.xp}
+  save();
+  openPanel(`<span class="station-tag">${ok?'MISi SELESAI':'COBA LAGI'}</span><h2>${ok?'Jawaban benar!':'Belum tepat'}</h2><p>${ok?'Kamu memperoleh '+(state.done.includes(s.id)?s.xp:0)+' XP untuk progres lokasi.':'Pelajari kembali materi lalu coba sekali lagi.'}</p><div class="card"><b>Penjelasan</b><p>${s.facts[s.correct===0?0:Math.min(s.correct,s.facts.length-1)]}</p></div><button id="again">${ok?'Kembali ke tambang':'Coba lagi'}</button>`);
+  document.getElementById('again').onclick=()=>ok?closePanel():showStationQuiz(s);
+ };
+}
+function examPanel(){
+ activeStation=null;quizMode=true;
+ const questions=[
+ {q:'1. Apa komponen utama cycle time dump truck?',opts:['Loading, hauling, dumping, return','Hanya waktu loading','Hanya waktu istirahat'],a:0},
+ {q:'2. Target produksi 1.200 ton selama 4 jam setara rata-rata…',opts:['300 ton/jam','480 ton/jam','4.800 ton/jam'],a:0},
+ {q:'3. Apa tindakan tepat saat menemukan kondisi tidak aman?',opts:['Tetap bekerja agar target tercapai','Hentikan/aman-kan pekerjaan dan laporkan sesuai prosedur','Abaikan jika tidak ada atasan'],a:1},
+ {q:'4. Mengapa kualitas batugamping perlu dipantau?',opts:['Agar sesuai spesifikasi bahan baku','Agar warna dump truck sama','Agar jarak hauling bertambah'],a:0},
+ {q:'5. Apa yang dapat menjadi bottleneck aliran material?',opts:['Crusher/conveyor yang kapasitasnya tidak mencukupi','Papan nama lokasi','Warna helm'],a:0}
+ ];
+ openPanel(`<span class="station-tag">FINAL EXAM</span><h2>Ujian Akhir</h2><p class="muted">5 soal · Lulus jika nilai minimal 80. Ini ujian demo, bukan sertifikasi kompetensi resmi.</p><form id="examForm">${questions.map((q,i)=>`<div class="card"><b>${q.q}</b>${q.opts.map((o,j)=>`<label style="display:block;margin:8px 0"><input type="radio" name="q${i}" value="${j}"> ${o}</label>`).join('')}</div>`).join('')}<button type="submit">Kirim ujian</button></form><div id="examResult"></div>`);
+ document.getElementById('examForm').onsubmit=(e)=>{
+  e.preventDefault();let score=0;questions.forEach((q,i)=>{const v=document.querySelector(`input[name=q${i}]:checked`);if(v&&Number(v.value)===q.a)score++});
+  const mark=Math.round(score/questions.length*100),pass=mark>=80&&state.done.length===stations.length;
+  state.lastExam={score:mark,passed:pass,at:new Date().toISOString(),seconds:elapsed()};save();
+  document.getElementById('examResult').innerHTML=`<div class="card"><h2>Nilai: ${mark}/100</h2><p>${state.done.length<stations.length?'Selesaikan semua lokasi untuk memenuhi syarat sertifikat.':pass?'LULUS — sertifikat demo tersedia.':'Belum lulus. Pelajari kembali materi lalu ulangi ujian.'}</p>${pass?'<button id="certBtn">Buat sertifikat demo</button>':''}</div>`;
+  if(pass)document.getElementById('certBtn').onclick=downloadCertificate;
+ };
+}
+function downloadCertificate(){
+ const name=prompt('Masukkan nama yang akan tercetak di sertifikat:',state.name)||state.name;
+ const code='CMA-DEMO-'+new Date().toISOString().slice(0,10).replaceAll('-','')+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
+ const doc=`<!doctype html><html><head><meta charset="utf-8"><title>Sertifikat Demo CMA</title><style>body{font-family:Georgia,serif;background:#eef0e9;padding:30px}.cert{max-width:900px;margin:30px auto;background:#fffdf4;border:10px double #53654c;padding:50px;text-align:center;color:#263529}.small{letter-spacing:4px;font: bold 13px Arial}.name{font-size:42px;border-bottom:1px solid #aab4a2;padding:12px}.meta{font:14px Arial;color:#526052;margin:22px}.note{font:12px Arial;color:#8a4b25;margin-top:35px}</style></head><body><div class="cert"><div class="small">CEMENT MINING ACADEMY</div><h1>SERTIFIKAT PENYELESAIAN</h1><p>Diberikan kepada</p><div class="name">${name.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}</div><p>atas penyelesaian modul demo</p><h2>Limestone Mining Fundamentals</h2><div class="meta">Nilai ujian: ${state.lastExam?.score||0}/100 · XP: ${state.xp} · Waktu belajar tercatat: ${fmt(elapsed())}<br>Tanggal: ${new Date().toLocaleDateString('id-ID')}<br>Nomor demo: ${code}</div><div class="note">SERTIFIKAT PROTOTIPE / DEMO — bukan sertifikat kompetensi resmi atau pengakuan regulator.</div><p style="margin-top:40px">Cement Mining Academy · Prototype V1</p></div><script>window.onload=()=>setTimeout(()=>window.print(),500)<\/script></body></html>`;
+ const blob=new Blob([doc],{type:'text/html'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='Sertifikat_CMA_Demo.html';a.click();URL.revokeObjectURL(url);
+}
+function interact(){
+ if(document.getElementById('panel').classList.contains('open'))return;
+ let nearest=null,dist=1e9;
+ for(const m of markers){const d=player.position.distanceTo(m.station.pos);if(d<dist){dist=d;nearest=m.station}}
+ if(nearest&&dist<5.8)stationPanel(nearest);
+ else if(player.position.distanceTo(new THREE.Vector3(0,0,24))<.1)examPanel();
+ else {document.getElementById('hint').textContent='Dekati penanda hijau di Loading, Crusher, atau Stockpile untuk belajar.';setTimeout(()=>document.getElementById('hint').textContent='Gunakan WASD / tombol arah. Dekati penanda lokasi lalu tekan E atau INTERAKSI.',2800)}
+}
+document.getElementById('actionBtn').onclick=interact;
+addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;if(e.key.toLowerCase()==='e'||e.key==='Enter')interact();if(e.key==='Escape')closePanel()});
+addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+const keys={};
+document.querySelectorAll('#mobileControls button').forEach(b=>{
+ const k=b.dataset.key;const on=e=>{e.preventDefault();keys[k]=true},off=e=>{e.preventDefault();keys[k]=false};
+ b.addEventListener('pointerdown',on);b.addEventListener('pointerup',off);b.addEventListener('pointerleave',off);b.addEventListener('pointercancel',off);
+});
+const clock=new THREE.Clock();
+function animate(){
+ requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.05);
+ if(!document.getElementById('panel').classList.contains('open')){
+  let dx=0,dz=0;if(keys.w||keys.arrowup)dz-=1;if(keys.s||keys.arrowdown)dz+=1;if(keys.a||keys.arrowleft)dx-=1;if(keys.d||keys.arrowright)dx+=1;
+  if(dx||dz){const l=Math.hypot(dx,dz);dx/=l;dz/=l;player.position.x+=dx*dt*8;player.position.z+=dz*dt*8;player.rotation.y=Math.atan2(dx,dz)}
+  player.position.x=THREE.MathUtils.clamp(player.position.x,-67,67);player.position.z=THREE.MathUtils.clamp(player.position.z,-55,62);
+ }
+ const target=new THREE.Vector3(player.position.x+10,player.position.y+10,player.position.z+15);
+ camera.position.lerp(target,1-Math.pow(.001,dt));camera.lookAt(player.position.x,player.position.y+1,player.position.z);
+ markers.forEach((m,i)=>{m.orb.position.y=2.7+Math.sin(Date.now()*.002+i)*.18;m.group.rotation.y=Math.sin(Date.now()*.0004+i)*.08});
+ renderer.render(scene,camera);
+}
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+setInterval(()=>{document.getElementById('timer').textContent='Waktu: '+fmt(elapsed())},1000);
+updateHud();animate();
+</script>
+</body>
+</html>
